@@ -18,10 +18,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.stm._
 import scala.concurrent._
 
-//You may want two separate systems!!! One for the ChatClients and the 
-//other for the actual Service
-//YOU DO WANT TWO SEPARATE SYSTEMS        
-
 sealed trait Event
 case class Login      (user: String)      extends Event
 case class Logout     (user: String)      extends Event
@@ -49,11 +45,11 @@ class ChatClient(val name: String) extends ChatSystem{
   def chatLog               = Await.result((chat ? GetChatLog(name)).mapTo[ChatLog], 1 minute)
 }
 
-class Session( user: String, storage: ActorRef ) extends Actor with akka.actor.ActorLogging{
+class Session( user: String, storage: ActorRef ) extends Actor {
   private val loginTime = System.currentTimeMillis
   private val userLog: List[String] = Nil
 
-  log.debug("New session for user [%s] has been created at [%s]".format(user, loginTime))
+  // log.debug("New session for user [%s] has been created at [%s]".format(user, loginTime))
 
   def receive = {
     case msg @ ChatMessage(from, message) =>
@@ -65,7 +61,9 @@ class Session( user: String, storage: ActorRef ) extends Actor with akka.actor.A
   }
 }
 
-trait ChatServer extends Actor with akka.actor.ActorLogging with ChatSystem{ 
+trait ChatServer extends Actor with ChatSystem{ 
+  val system: ActorSystem
+
   override val supervisorStrategy =
   OneForOneStrategy(maxNrOfRetries = 10, withinTimeRange = 1 minute) {
     case _ ⇒ Restart
@@ -74,29 +72,28 @@ trait ChatServer extends Actor with akka.actor.ActorLogging with ChatSystem{
 
   def receive: Receive = sessionManagement orElse chatManagement
 
-  protected def chatManagement: Receive
-  protected def sessionManagement: Receive
+  protected def chatManagement    : Receive
+  protected def sessionManagement : Receive
   protected def shutdownSessions(): Unit
 
   override def postStop() = {
     println("Chat server is shutting down...")
     shutdownSessions
-    // self.unlink(storage)
     system.stop(storage)
   }
 
 }
 
-trait SessionManagement extends ChatSystem with akka.actor.ActorLogging{ this: Actor =>
+trait SessionManagement { this: Actor =>
+  val system: ActorSystem
 
-  val storage: ActorRef //someone needs to provide the ChatStorage
-  var sessions = Map[String, ActorRef]()//MUTABLE
+  val storage: ActorRef
+  var sessions = Map[String, ActorRef]()
 
   protected def sessionManagement: Receive = {
     case Login(username) => 
       println( "User " + username + " has logged in.")
       val session = system.actorOf( Props(classOf[Session], username, storage), name = username)
-      // system.start( session )
       sessions = sessions ++ Map(username -> session)
       println( sessions ) 
     
@@ -113,7 +110,7 @@ trait SessionManagement extends ChatSystem with akka.actor.ActorLogging{ this: A
 }
 
 trait ChatManagement { this: Actor =>
-  var sessions: Map[String, ActorRef] //needs to be provided
+  var sessions: Map[String, ActorRef]
 
   protected def chatManagement: Receive = {
     case msg @ ChatMessage(from, _) => getSession(from).foreach(_ ! msg)
@@ -132,7 +129,7 @@ trait ChatManagement { this: Actor =>
 
 trait ChatStorage extends Actor
 
-class MemoryChatStorage extends ChatStorage with akka.actor.ActorLogging {
+class MemoryChatStorage extends ChatStorage {
 
   private var chatLog = Vector[String]()
 
@@ -148,25 +145,19 @@ class MemoryChatStorage extends ChatStorage with akka.actor.ActorLogging {
   override def postRestart( reason: Throwable ) = chatLog = Vector()
 }
 
-trait MemoryChatStorageFactory extends ChatSystem {
+trait MemoryChatStorageFactory extends ChatSystem { 
+  val system: ActorSystem
   val storage = system.actorOf(Props[MemoryChatStorage])
 }
 
-class ChatService extends ChatServer with SessionManagement with ChatManagement with MemoryChatStorageFactory 
+class ChatService extends ChatServer 
+with SessionManagement 
+with ChatManagement 
+with MemoryChatStorageFactory 
+with ChatSystem
 
 object Main extends App with ChatSystem{
   system.actorOf(Props[ChatService], name = "receiver")
-  // println("asl;dka;dfj")
-  // val client1 = new ChatClient("taylor")
-  // client1.login
-  // val client2 = new ChatClient("ted")
-  // client2.login
-  // client1.post("Check it out!")
-  // client1.chatLog
-  // client2.chatLog
-
-  // client1.logout
-  // client2.logout
 
   val client1 = new ChatClient("jonas")
   client1.login
@@ -181,14 +172,10 @@ object Main extends App with ChatSystem{
 
   client1.post("Hi again")
 
-  // while True  
-  // println("CHAT LOG:\n\t" + client1.chatLog)
+  client1.logout
+  client2.logout
 
-  // client1.logout
-  // client2.logout
-
-  // system.shutdown()
-
+  system.shutdown
 }
 
 

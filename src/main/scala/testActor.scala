@@ -1,6 +1,5 @@
 import akka.actor.Actor
 import akka._
-// import akka.actor.Actor.actorOf
 import akka.actor.{ ActorSystem, Actor, Props }
  
 class MyActor extends Actor {
@@ -15,4 +14,5 @@ class MyActor extends Actor {
 //   val myActor = system.actorOf(Props[MyActor])
 
 //   myActor ! "test"
+//   system.shutdown
 // }
