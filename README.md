@@ -4,7 +4,7 @@ REMOTE CHAT SERVER
 Introduction
 ------------
 
-* `Tutorial source code. <https://github.com/tbrown1979/akka-chat-server>
+Tutorial source code. <https://github.com/tbrown1979/akka-chat-server>
 
 Writing correct concurrent, fault-tolerant and scalable applications is too hard. Most of the time it’s because we are using the wrong tools and the wrong level of abstraction.
 

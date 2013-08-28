@@ -1,22 +1,19 @@
-import akka.actor.Actor
-import akka._
-import akka.actor.{ ActorSystem, Actor, Props }
-import akka.actor._
-import akka.remote._
-import com.typesafe.config.ConfigFactory
-import akka.pattern.ask
-import akka.util.Timeout
-import akka.event.Logging
+import akka.actor.{ ActorSystem, Actor, Props, ActorRef }
 import akka.actor.OneForOneStrategy
 import akka.actor.SupervisorStrategy._
+import akka.remote._
+import akka.util.Timeout
+import akka.event.Logging
+import akka.pattern.{ ask, pipe }
+
 import scala.concurrent.duration._
 import scala.concurrent.Future
-import akka.pattern.{ ask, pipe }
 import scala.util.{Try, Success, Failure}
 import scala.concurrent.ExecutionContext.Implicits.global
-
 import scala.concurrent.stm._
-import scala.concurrent._
+import scala.concurrent.Await
+// import scala.concurrent._
+import com.typesafe.config.ConfigFactory
 
 sealed trait Event
 case class Login      (user: String)      extends Event
@@ -61,7 +58,7 @@ class Session( user: String, storage: ActorRef ) extends Actor {
   }
 }
 
-trait ChatServer extends Actor with ChatSystem{ 
+trait ChatServer extends Actor { 
   val system: ActorSystem
 
   override val supervisorStrategy =
@@ -145,16 +142,16 @@ class MemoryChatStorage extends ChatStorage {
   override def postRestart( reason: Throwable ) = chatLog = Vector()
 }
 
-trait MemoryChatStorageFactory extends ChatSystem { 
+trait MemoryChatStorageFactory { 
   val system: ActorSystem
   val storage = system.actorOf(Props[MemoryChatStorage])
 }
 
-class ChatService extends ChatServer 
+class ChatService extends ChatSystem
+with ChatServer 
 with SessionManagement 
 with ChatManagement 
 with MemoryChatStorageFactory 
-with ChatSystem
 
 object Main extends App with ChatSystem{
   system.actorOf(Props[ChatService], name = "receiver")
